@@ -10,6 +10,15 @@ Includes evaluations methods for the four tasks (one sequence + three classifica
 - classification output
     - called Llama2-7b-hf to standardize the output and count exact match
     - or a GPT model
+ 
+## data_processor.py
+Pulls and downsamples data for use downstream.
+To use the dataset, make sure the `CMU-MultimodalSDK` is properly installed.
+
+```
+cd CMU-MultimodalSDK
+pip install .
+```
 
 
 ### Notes:
