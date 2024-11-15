@@ -3,12 +3,13 @@ from mmsdk import mmdatasdk
 from sklearn.model_selection import train_test_split
 import numpy as np
 import random
+import os
 
 token = "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"
 
 class DataProcessor:
-    def prepare_mozilla_dataset(batch):
-        """Function to preprocess the Mozilla Common Voice dataset"""
+    def prepare_mozilla_dataset(self, batch):
+        """Preprocess the Mozilla Common Voice dataset to clean text."""
         transcription = batch["sentence"]
 
         if transcription.startswith('"') and transcription.endswith('"'):
@@ -27,38 +28,67 @@ class DataProcessor:
         indices = random.sample(range(dataset_size), min(target_size, dataset_size))
         return dataset.select(indices)
 
-    def load_and_process_data(self):
-        ssum_ds = load_dataset("komats/mega-ssum")
-        noise_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise")
-        # mozilla_voice = load_dataset("mozilla-foundation/common_voice_17_0", "en", token=token, trust_remote_code=True, split="train[:10%]")
-        mozilla_voice = load_dataset("mozilla-foundation/common_voice_5_1", "en", split="train[:10%]", token=token, trust_remote_code=True)
-        cmumosi_highlevel = mmdatasdk.mmdataset(mmdatasdk.cmu_mosi.highlevel, 'cmumosi/')
+    def load_and_process_data(self, num_rows=1000):
+        # Load datasets
+        ssum_ds = load_dataset("komats/mega-ssum", split=f"core[:{num_rows}]")
+        noise_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise", split=f"10[:{num_rows}]")
+        mozilla_voice = load_dataset("mozilla-foundation/common_voice_5_1", "en", split=f"train[:{num_rows}]", token=token)
+        slue_ds = load_dataset("asapp/slue", "voxceleb", split=f"train[:{num_rows}]", token=token)
 
+        # Preprocess Mozilla Voice
         mozilla_voice = mozilla_voice.map(self.prepare_mozilla_dataset, desc="Preprocessing Mozilla Voice")
 
-        print("=!= Beginning Processing =!=")
-        ssum_texts = ssum_ds['train']['summary']
-        noise_texts = noise_ds['test']['text']
-        mozilla_texts = mozilla_voice['train']['sentence']
+        print("==!== Beginning Processing ==!==")
+        print(f'=!= Downsampling: Using min_size={num_rows} =!=')
 
-        cmumosi_texts = cmumosi_highlevel['cmumosi']['CMU_MOSI_TimestampedWords']['text']
-        cmumosi_texts = [entry[0] for entry in cmumosi_texts]
+        ssum_samples = [(x['audio'], x['summary']) for x in ssum_ds]
+        noise_samples = [(x['audio'], x['text']) for x in noise_ds]
+        mozilla_samples = [(x['audio'], x['sentence'], x['age'], x['gender']) for x in mozilla_voice]
+        slue_samples = [(x['audio'], x['sentiment']) for x in slue_ds]
 
-        min_size = min(len(ssum_texts), len(noise_texts), len(mozilla_texts), len(cmumosi_texts))
-        ssum_texts = self.downsample_dataset(ssum_ds['train'], min_size)
-        noise_texts = self.downsample_dataset(noise_ds['test'], min_size)
-        mozilla_texts = self.downsample_dataset(mozilla_voice['train'], min_size)
-        cmumosi_texts = self.downsample_dataset(cmumosi_highlevel['cmumosi']['CMU_MOSI_TimestampedWords'], min_size)
+        # cmumosi_texts = cmumosi_highlevel['cmumosi']['CMU_MOSI_TimestampedWords']['text']
+        # cmumosi_texts = [entry[0] for entry in cmumosi_texts]
+        # cmumosi_samples = [(entry['audio'], entry['sentiment']) for entry in cmumosi_texts]
+        # ssum_samples = self.downsample_dataset(ssum_samples, min_size)
+        # noise_samples = self.downsample_dataset(noise_samples, min_size)
+        # mozilla_samples = self.downsample_dataset(mozilla_samples, min_size)
+        # slue_samples = self.downsample_dataset(slue_samples, min_size)
 
-        combined_texts = ssum_texts + noise_texts + mozilla_texts + cmumosi_texts
-        combined_train, combined_test = train_test_split(combined_texts, test_size=0.2, random_state=42)
+        ssum_train, ssum_test = train_test_split(ssum_samples, test_size=0.2, random_state=42)
+        noise_train, noise_test = train_test_split(noise_samples, test_size=0.2, random_state=42)
+        mozilla_train, mozilla_test = train_test_split(mozilla_samples, test_size=0.2, random_state=42)
+        slue_train, slue_test = train_test_split(slue_samples, test_size=0.2, random_state=42)
 
         return {
-            "train": combined_train,
-            "test": combined_test
+            "summary": {
+                "train": ssum_train,
+                "test": ssum_test
+            },
+            "noise_prediction": {
+                "train": noise_train,
+                "test": noise_test
+            },
+            "age_gender_prediction": {
+                "train": mozilla_train,
+                "test": mozilla_test
+            },
+            "sentiment_analysis": {
+                "train": slue_train,
+                "test": slue_test
+            }
         }
+
+        # Combine and split into train and test
+        # combined_samples = ssum_samples + noise_samples + mozilla_samples + cmumosi_samples
+        # combined_train, combined_test = train_test_split(combined_samples, test_size=0.2, random_state=42)
+
+        # # Return the dataset with audio and metadata
+        # return {
+        #     "train": combined_train,
+        #     "test": combined_test
+        # }
 
 if __name__ == '__main__':
     dp = DataProcessor()
     data = dp.load_and_process_data()
-    print(f"Train size: {len(data['train'])}, Test size: {len(data['test'])}")
+    print(data.keys())
