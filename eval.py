@@ -2,15 +2,22 @@ from transformers import pipeline
 from evaluate import load
 from transformers import LlamaForCausalLM, LlamaTokenizer
 import torch
+import re
+from openai import OpenAI
+client = OpenAI(
+    api_key='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',  # This is the default and can be omitted
+)
+
 
 LLM_MODEL = "meta-llama/Llama-2-7b-hf" # could we use ChatGPT-4o API instead?
+LLM_MODEL = "gpt-3.5-turbo"
 
 noisedet = """The task is to determine whether the surrounding of the speech is noisy or not. The audio is recorded under no noise, white noise, or natural noise. Read the following output from the ASR model and report "True" for noisy and "False" for not noisy. For example,  "False" when the audio is clear or noise."""
 
 sentiment_bank = ""
 sentdet = f"""The task is to determine the sentiment of the speaker. The sentiment should be one of {sentiment_bank}. Read the following output from the ASR model and report one of the sentiment. For example. "happy" when the speaker shows joy."""
 
-agegender = """The task is to provide the age and gender of the speaker. Read the following result from the ASR model and output in the     output of "<age>,  <gender>". For example "25, female"."""
+agegender = """The task is to provide the age and gender of the speaker. Read the following result from the ASR model and output in the output of "<age>,  <gender>", where <age> must be a number, and <gender> must be either male or female. Guess if the input is ambigous, report N/A if not mentioned. For example "25, female"."""
 
 
 TASK_PROMPTS = {
@@ -51,28 +58,26 @@ class EvalMetric:
             return "WER"
         elif self.task_name in classification_tasks:
             self._initialize_llm()
-            print("llm_loded")
             return "LLM-assisted"  
         else:
             raise ValueError
         
 
     def _initialize_llm(self):
-        # if LLM_MODEL != "chatGPT":
+        if "gpt" not in LLM_MODEL.lower():
+            self.model = LlamaForCausalLM.from_pretrained(LLM_MODEL)
+            self.tokenizer = LlamaTokenizer.from_pretrained(LLM_MODEL)
+            pipe = pipeline(
+                "text-generation",
+                model=self.model,
+                tokenizer=self.tokenizer,
+                torch_dtype=torch.float16,
+                device=0,
+                )
+            self.llm = pipe
+        else:
+            self.llm = None
 
-        self.model = LlamaForCausalLM.from_pretrained(LLM_MODEL)
-        self.tokenizer = LlamaTokenizer.from_pretrained(LLM_MODEL)
-        pipe = pipeline(
-            "text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            torch_dtype=torch.float16,
-            device=0,
-            )
-        self.llm = pipe
-        # else:
-        #     # TODO add the pipeline for chatGPT API
-        #     raise ValueError
 
     def evaluate(self, reference, hypothesis):
         """
@@ -103,6 +108,25 @@ class EvalMetric:
         """
         wer_score = self.wer_metric.compute(references=[reference], predictions=[hypothesis])
         return (reference, hypothesis, wer_score * 100)  # Return WER as a percentage
+    
+    def _normalize(self, prompt):
+        if "gpt" not in LLM_MODEL.lower():
+            sequences = self.llm(
+                prompt.strip(),
+                do_sample=True,
+                top_k=10,
+                num_return_sequences=1,
+                eos_token_id=self.tokenizer.eos_token_id,
+                max_new_tokens=100,
+                )
+            return sequences[0]['generated_text'].strip()
+        else:
+            messages = [ {"role": "user", "content": 
+                        prompt} ]
+            self.llm = client.chat.completions.create(
+                model=LLM_MODEL, messages=messages
+            )
+            return self.llm.choices[0].message.content
 
     def _llm_assisted_evaluation(self, reference, hypothesis):
         """
@@ -123,18 +147,10 @@ class EvalMetric:
             {instruction}
             The output from the ASR model: "{hypothesis}". Report your final decision is quotation marks.
             """
-        sequences = self.llm(
-            prompt.strip(),
-            do_sample=True,
-            top_k=10,
-            num_return_sequences=1,
-            eos_token_id=self.tokenizer.eos_token_id,
-            max_new_tokens=100,
-            )
-        for seq in sequences:
-            print(f"{seq['generated_text']}")
-        standardized_output = sequences[0]['generated_text'].strip()
-        return (reference, standardized_output, int(reference == standardized_output))
+        standardized_output = self._normalize(prompt)
+        matches = re.findall(r'"(.*?)"', standardized_output)
+        result = matches[-1]
+        return (reference, result, int(reference == result))
         
 
 
