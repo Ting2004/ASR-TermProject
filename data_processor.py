@@ -30,11 +30,13 @@ class DataProcessor:
     def load_and_process_data(self):
         ssum_ds = load_dataset("komats/mega-ssum")
         noise_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise")
-        mozilla_voice = load_dataset("mozilla-foundation/common_voice_17_0", "en", token=token, trust_remote_code=True) # , split="train[:10%]")
+        # mozilla_voice = load_dataset("mozilla-foundation/common_voice_17_0", "en", token=token, trust_remote_code=True, split="train[:10%]")
+        mozilla_voice = load_dataset("mozilla-foundation/common_voice_5_1", "en", split="train[:10%]", token=token, trust_remote_code=True)
         cmumosi_highlevel = mmdatasdk.mmdataset(mmdatasdk.cmu_mosi.highlevel, 'cmumosi/')
 
         mozilla_voice = mozilla_voice.map(self.prepare_mozilla_dataset, desc="Preprocessing Mozilla Voice")
 
+        print("=!= Beginning Processing =!=")
         ssum_texts = ssum_ds['train']['summary']
         noise_texts = noise_ds['test']['text']
         mozilla_texts = mozilla_voice['train']['sentence']
