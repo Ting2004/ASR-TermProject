@@ -13,9 +13,10 @@ Includes evaluations methods for the four tasks (one sequence + three classifica
  
 ## data_processor.py
 Pulls and downsamples data for use downstream.
-To use the dataset, make sure the `CMU-MultimodalSDK` is properly installed.
+To use the dataset, make sure the `soundfile` and `CMU-MultimodalSDK` is properly installed.
 
 ```
+pip install soundfile
 cd CMU-MultimodalSDK
 pip install .
 ```
