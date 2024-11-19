@@ -1,4 +1,4 @@
-from datasets import load_dataset, DatasetDict
+from datasets import load_dataset, DatasetDict, concatenate_datasets
 from mmsdk import mmdatasdk
 from sklearn.model_selection import train_test_split
 import numpy as np
@@ -31,18 +31,26 @@ class DataProcessor:
     def load_and_process_data(self, num_rows=1000):
         # Load datasets
         ssum_ds = load_dataset("komats/mega-ssum", split=f"core[:{num_rows}]")
-        noise_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise", split=f"10[:{num_rows}]")
+        noise_clean_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise", split="40")
+        noise_clean_ds = noise_clean_ds.add_column("noise", ["false"] * len(noise_clean_ds))
+        noise_noisy_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise", split="0")
+        noise_noisy_ds = noise_noisy_ds.add_column("noise", ["true"] * len(noise_noisy_ds))
+        noise_ds = concatenate_datasets([noise_clean_ds, noise_noisy_ds])
+
+
+
         mozilla_voice = load_dataset("mozilla-foundation/common_voice_5_1", "en", split=f"train[:{num_rows}]", token=token)
         slue_ds = load_dataset("asapp/slue", "voxceleb", split=f"train[:{num_rows}]", token=token)
 
         # Preprocess Mozilla Voice
+        mozilla_voice = mozilla_voice.filter(lambda row: row["gender"] != "" and row["age"] != "")
         mozilla_voice = mozilla_voice.map(self.prepare_mozilla_dataset, desc="Preprocessing Mozilla Voice")
 
         print("==!== Beginning Processing ==!==")
         print(f'=!= Downsampling: Using min_size={num_rows} =!=')
 
         ssum_samples = [(x['audio'], x['summary']) for x in ssum_ds]
-        noise_samples = [(x['audio'], x['text']) for x in noise_ds]
+        noise_samples = [(x['audio'], x['noise']) for x in noise_ds]
         mozilla_samples = [(x['audio'], x['sentence'], x['age'], x['gender']) for x in mozilla_voice]
         slue_samples = [(x['audio'], x['sentiment']) for x in slue_ds]
 
