@@ -36,7 +36,7 @@ class DataProcessor:
         noise_clean_ds = noise_clean_ds.add_column("noise", ["false"] * len(noise_clean_ds))
 
         noise_noisy_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise", split=["0", "5", "10"])
-        noise_noisy_ds = concatenate_datasets(*noise_noisy_ds())
+        noise_noisy_ds = concatenate_datasets(*noise_noisy_ds.values())
         noise_noisy_ds = noise_noisy_ds.add_column("noise", ["true"] * len(noise_noisy_ds))
         noise_ds = concatenate_datasets([noise_clean_ds, noise_noisy_ds])
 
