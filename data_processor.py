@@ -31,13 +31,14 @@ class DataProcessor:
     def load_and_process_data(self, num_rows=1000):
         # Load datasets
         ssum_ds = load_dataset("komats/mega-ssum", split=f"core[:{num_rows}]")
-        noise_clean_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise", split="40")
+        noise_clean_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise", split=["40", "35", "30"])
+        noise_clean_ds = concatenate_datasets(*noise_clean_ds.values())
         noise_clean_ds = noise_clean_ds.add_column("noise", ["false"] * len(noise_clean_ds))
-        noise_noisy_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise", split="0")
+
+        noise_noisy_ds = load_dataset("distil-whisper/librispeech_asr-noise", "test-pub-noise", split=["0", "5", "10"])
+        noise_noisy_ds = concatenate_datasets(*noise_noisy_ds())
         noise_noisy_ds = noise_noisy_ds.add_column("noise", ["true"] * len(noise_noisy_ds))
         noise_ds = concatenate_datasets([noise_clean_ds, noise_noisy_ds])
-
-
 
         mozilla_voice = load_dataset("mozilla-foundation/common_voice_5_1", "en", split=f"train[:{num_rows}]", token=token)
         slue_ds = load_dataset("asapp/slue", "voxceleb", split=f"train[:{num_rows}]", token=token)
